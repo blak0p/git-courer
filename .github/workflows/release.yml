@@ -9,9 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  build-macos:
-    name: Build macOS (amd64 + arm64)
-    runs-on: macos-latest
+  build-macos-amd64:
+    name: Build macOS amd64
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
@@ -20,27 +20,21 @@ jobs:
           go-version: '1.26'
           cache: true
 
-      - name: Build amd64
+      - name: Build amd64 archive
         run: |
-          CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${{ github.ref_name }}" -o git-courer-darwin-amd64 ./cmd/main.go
-
-      - name: Build arm64
-        run: |
-          CGO_ENABLED=1 GOARCH=arm64 go build -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${{ github.ref_name }}" -o git-courer-darwin-arm64 ./cmd/main.go
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${GITHUB_REF_NAME}" -o git-courer ./cmd/main.go
+          tar -czf "git-courer_${VERSION}_darwin_amd64.tar.gz" git-courer
 
       - uses: actions/upload-artifact@v4
         with:
-          name: binary-darwin-amd64
-          path: git-courer-darwin-amd64
+          name: archive-darwin-amd64
+          path: git-courer_*_darwin_amd64.tar.gz
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: binary-darwin-arm64
-          path: git-courer-darwin-arm64
-
-  build-linux:
-    name: Build Linux amd64
-    runs-on: ubuntu-latest
+  build-macos-arm64:
+    name: Build macOS arm64
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -49,14 +43,17 @@ jobs:
           go-version: '1.26'
           cache: true
 
-      - name: Build Binary
+      - name: Build arm64 archive
         run: |
-          CGO_ENABLED=1 go build -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${{ github.ref_name }}" -o git-courer-linux-amd64 ./cmd/main.go
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${GITHUB_REF_NAME}" -o git-courer ./cmd/main.go
+          tar -czf "git-courer_${VERSION}_darwin_arm64.tar.gz" git-courer
 
       - uses: actions/upload-artifact@v4
         with:
-          name: binary-linux-amd64
-          path: git-courer-linux-amd64
+          name: archive-darwin-arm64
+          path: git-courer_*_darwin_arm64.tar.gz
 
   build-windows-amd64:
     name: Build Windows amd64
@@ -78,7 +75,9 @@ jobs:
       # DLL is copied next to .exe and both uploaded so the binary works on Windows.
 
       - name: Build Binary
+        shell: bash
         run: |
+          set -euo pipefail
           go build -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${{ github.ref_name }}" -o git-courer-windows-amd64.exe ./cmd/main.go
           cp ffi/windows_amd64/ts_pack_core_ffi.dll ts_pack_core_ffi.dll
 
@@ -92,8 +91,8 @@ jobs:
   release:
     name: Release
     needs:
-      - build-linux
-      - build-macos
+      - build-macos-amd64
+      - build-macos-arm64
       - build-windows-amd64
     runs-on: ubuntu-latest
     steps:
@@ -123,17 +122,121 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-      - name: Download macOS & Windows binaries
+      - name: Download native macOS archives
         uses: actions/download-artifact@v8
         with:
           path: native-binaries
-          pattern: binary-*
+          pattern: archive-darwin-*
           merge-multiple: true
 
-      - name: Upload native macOS & Windows binaries
+      - name: Download Windows binaries
+        uses: actions/download-artifact@v8
+        with:
+          path: native-binaries
+          pattern: binary-windows-amd64
+          merge-multiple: true
+
+      - name: Upload native release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ github.ref_name }}" native-binaries/* --clobber
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release upload "${GITHUB_REF_NAME}" \
+            "native-binaries/git-courer_${VERSION}_darwin_amd64.tar.gz" \
+            "native-binaries/git-courer_${VERSION}_darwin_arm64.tar.gz" \
+            native-binaries/git-courer-windows-amd64.exe \
+            native-binaries/ts_pack_core_ffi.dll \
+            --clobber
+
+      - name: Add native checksums to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release download "${GITHUB_REF_NAME}" \
+            --pattern "git-courer_${VERSION}_linux_amd64.tar.gz" \
+            --dir native-binaries \
+            --clobber
+          (
+            cd native-binaries
+            sha256sum \
+              "git-courer_${VERSION}_linux_amd64.tar.gz" \
+              "git-courer_${VERSION}_darwin_amd64.tar.gz" \
+              "git-courer_${VERSION}_darwin_arm64.tar.gz" \
+              git-courer-windows-amd64.exe \
+              ts_pack_core_ffi.dll \
+              > checksums.txt
+          )
+          gh release upload "${GITHUB_REF_NAME}" native-binaries/checksums.txt --clobber
+
+      - name: Update Homebrew formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          AMD64_SHA="$(sha256sum "native-binaries/git-courer_${VERSION}_darwin_amd64.tar.gz" | awk '{print $1}')"
+          ARM64_SHA="$(sha256sum "native-binaries/git-courer_${VERSION}_darwin_arm64.tar.gz" | awk '{print $1}')"
+          gh release download "${GITHUB_REF_NAME}" \
+            --pattern "git-courer_${VERSION}_linux_amd64.tar.gz" \
+            --dir native-binaries \
+            --clobber
+          LINUX_SHA="$(sha256sum "native-binaries/git-courer_${VERSION}_linux_amd64.tar.gz" | awk '{print $1}')"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/blak0p/homebrew-tap.git" homebrew-tap
+          cat > homebrew-tap/Formula/git-courer.rb <<EOF
+          class GitCourer < Formula
+            desc "AI-powered local git operations via MCP. Zero cloud tokens for git."
+            homepage "https://github.com/blak0p/git-courer"
+            license "MIT"
+            version "${VERSION}"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/blak0p/git-courer/releases/download/v${VERSION}/git-courer_${VERSION}_darwin_amd64.tar.gz"
+                sha256 "${AMD64_SHA}"
+              end
+              if Hardware::CPU.arm?
+                url "https://github.com/blak0p/git-courer/releases/download/v${VERSION}/git-courer_${VERSION}_darwin_arm64.tar.gz"
+                sha256 "${ARM64_SHA}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
+                url "https://github.com/blak0p/git-courer/releases/download/v${VERSION}/git-courer_${VERSION}_linux_amd64.tar.gz"
+                sha256 "${LINUX_SHA}"
+              end
+            end
+
+            def install
+              bin.install "git-courer"
+            end
+
+            test do
+              system "#{bin}/git-courer", "--version"
+            end
+          end
+          EOF
+
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/git-courer.rb
+          if git diff --cached --quiet -- Formula/git-courer.rb; then
+            echo "Homebrew formula is already current"
+          else
+            git commit -m "chore: update git-courer formula to v${VERSION}"
+            git push
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit "${GITHUB_REF_NAME}" --draft=false

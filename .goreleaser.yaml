@@ -23,9 +23,6 @@ builds:
       - -X github.com/blak0p/git-courer/internal/config.ServerVersion={{.Version}}
     flags:
       - -trimpath
-    hooks:
-      post:
-        - upx --ultra-brute "{{ .Path }}"
 
 archives:
   - format: tar.gz
@@ -38,6 +35,7 @@ checksum:
   name_template: "checksums.txt"
 
 release:
+  draft: true
   prerelease: auto
   mode: keep-existing
   header: |
@@ -57,17 +55,3 @@ changelog:
       - "^test:"
       - "^ci:"
       - "^chore:"
-
-brews:
-  - repository:
-      owner: blak0p
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    name: git-courer
-    homepage: "https://github.com/blak0p/git-courer"
-    description: "AI-powered local git operations via MCP. Zero cloud tokens for git."
-    license: "MIT"
-    commit_msg_template: "chore: update git-courer formula to {{ .Tag }}"
-    test: |
-      system "#{bin}/git-courer --version"
