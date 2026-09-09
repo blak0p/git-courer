@@ -24,10 +24,11 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          CC="$(xcrun --find clang)" GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${GITHUB_REF_NAME}" -o git-courer ./cmd/main.go
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          CC="clang -isysroot ${SDKROOT} -arch x86_64" GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${GITHUB_REF_NAME}" -o git-courer ./cmd/main.go
           file git-courer | grep -q 'Mach-O.*x86_64'
           tar -czf "git-courer_${VERSION}_darwin_amd64.tar.gz" git-courer
-          CC="$(xcrun --find clang)" GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${GITHUB_REF_NAME}" -o git-courer ./cmd/main.go
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${GITHUB_REF_NAME}" -o git-courer ./cmd/main.go
           file git-courer | grep -q 'Mach-O.*arm64'
           tar -czf "git-courer_${VERSION}_darwin_arm64.tar.gz" git-courer
 
