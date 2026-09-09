@@ -108,6 +108,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
 
       - name: Download native macOS archives
         uses: actions/download-artifact@v8
