@@ -1,6 +1,6 @@
 module github.com/blak0p/git-courer
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -12,7 +12,7 @@ require (
 	github.com/mark3labs/mcp-go v0.55.1
 	github.com/stretchr/testify v1.11.1
 	github.com/whilp/git-urls v1.0.0
-	golang.org/x/sync v0.21.0
+	golang.org/x/sync v0.23.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
