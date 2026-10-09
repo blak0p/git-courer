@@ -32,12 +32,12 @@ jobs:
           file git-courer | grep -q 'Mach-O.*arm64'
           tar -czf "git-courer_${VERSION}_darwin_arm64.tar.gz" git-courer
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: archive-darwin-amd64
           path: git-courer_*_darwin_amd64.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: archive-darwin-arm64
           path: git-courer_*_darwin_arm64.tar.gz
@@ -68,7 +68,7 @@ jobs:
           go build -ldflags "-s -w -X github.com/blak0p/git-courer/internal/config.ServerVersion=${{ github.ref_name }}" -o git-courer-windows-amd64.exe ./cmd/main.go
           cp ffi/windows_amd64/ts_pack_core_ffi.dll ts_pack_core_ffi.dll
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: binary-windows-amd64
           path: |
